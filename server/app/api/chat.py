@@ -6,12 +6,18 @@ router = APIRouter()
 
 class QueryRequest(BaseModel):
     query: str
+    session_id: str
     top_k: int = 5
 
 @router.post("/")
 async def chat(request: QueryRequest):
-    relevant_chunks = query_rag(request.query, top_k=request.top_k)
-    return {
-        "query": request.query,
-        "relevant_chunks": relevant_chunks
-    }
+    try:
+        result = query_rag(
+            question=request.query,
+            session_id=request.session_id,
+            top_k=request.top_k
+        )
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+

@@ -2,6 +2,7 @@ import os
 from fastapi import APIRouter, UploadFile, File
 from app.loaders.pdf import load_pdf
 from app.rag.pipeline import add_document_chunks  # import the function
+from app.utils.chunking import chunk_text
 
 router = APIRouter()
 
@@ -25,11 +26,10 @@ async def upload_file(file: UploadFile = File(...)):
             text = load_pdf(file_path)
 
             # Split text into chunks (example: 500 chars each)
-            chunk_size = 500
-            chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+            chunks = chunk_text(text, chunk_size=500, overlap=100)
 
             # Add chunks to vector store
-            add_document_chunks(chunks)
+            add_document_chunks(chunks, source=file.filename)
 
             return {
                 "filename": file.filename,
