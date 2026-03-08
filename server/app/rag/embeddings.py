@@ -1,10 +1,17 @@
 from sentence_transformers import SentenceTransformer
+from typing import List
 
-# Load a free pre-trained model
-model = SentenceTransformer('all-MiniLM-L6-v2')  # small, fast, free
+# Load small, fast pre-trained model
+embed_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-def get_embedding(text: str) -> list:
+def get_embedding(text: str) -> List[float]:
     """
-    Converts text to embedding vector using local model.
+    Converts text into an embedding vector.
+    
+    Args:
+        text: Text string to embed.
+    
+    Returns:
+        List of floats representing embedding.
     """
-    return model.encode(text).tolist()  # returns a float list
+    return embed_model.encode(text).tolist()

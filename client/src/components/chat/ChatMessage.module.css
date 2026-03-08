@@ -1,0 +1,93 @@
+.messageWrapper {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.userContainer {
+  text-align: right;
+}
+
+.botContainer {
+  text-align: left;
+}
+
+.userMessage {
+  display: inline-block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 1rem;
+  max-width: 80%;
+  word-break: break-word;
+  background-color: #2563eb;
+  color: white;
+}
+
+.botMessage {
+  display: inline-block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 1rem;
+  max-width: 80%;
+  word-break: break-word;
+  background-color: #e5e7eb;
+  color: black;
+}
+
+/* File preview wrapper */
+.filesWrapper {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.5rem;
+  gap: 0.25rem;
+}
+
+/* Individual file item */
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Uploaded file color */
+.uploadedFile {
+  color: #10b981; /* green */
+  font-weight: 500;
+}
+
+/* Uploading file color */
+.uploadingFile {
+  color: #3b82f6; /* blue */
+  font-weight: 500;
+}
+
+/* File size text */
+.fileSize {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Progress bar container */
+.progressBarWrapper {
+  flex: 1;
+  height: 4px;
+  background-color: #d1d5db;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-left: 1.5rem; /* indent under file name */
+  margin-top: 2px;
+}
+
+/* Actual progress bar */
+.progressBar {
+  height: 100%;
+  background-color: #3b82f6; /* blue */
+  transition: width 0.2s ease;
+}
+
+/* Sources list (optional) */
+.sourcesList {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  margin-left: 1rem;
+  list-style-type: disc;
+}

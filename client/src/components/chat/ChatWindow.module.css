@@ -1,0 +1,16 @@
+.container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  overflow-y: auto;
+  background-color: #1e1e1e; /* or your preferred chat bg */
+  border-radius: 0.5rem;
+}
+
+.aiTyping {
+  font-style: italic;
+  font-size: 0.9rem;
+  color: #9ca3af; /* gray color */
+  margin-top: 0.25rem;
+}

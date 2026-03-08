@@ -1,49 +1,104 @@
-from typing import List, Dict
+﻿from rank_bm25 import BM25Okapi
+from app.rag.vectorstore import ChromaVectorStore
 import numpy as np
-from app.rag.vectorstore import VectorStore
 
-class Retriever:
-    def __init__(self, vector_store: VectorStore):
+class HybridRetriever:
+    def __init__(self, vector_store: ChromaVectorStore):
         self.vector_store = vector_store
+        self.bm25_index = None
+        self.texts = []
+        self.metadatas = []
+        self._last_version = -1
 
-    def retrieve(
-        self,
-        query_vector: List[float],
-        top_k: int = 5,
-        score_threshold: float = None
-    ) -> List[Dict]:
-        """
-        Returns list of:
-        {
-            "text": str,
-            "score": float,
-            "metadata": dict
-        }
-        """
+    def _build_bm25(self):
+        # Only rebuild when vector store version changes
+        if getattr(self.vector_store, "_version", -1) == self._last_version and self.bm25_index is not None:
+            return
 
-        if not self.vector_store.texts:
+        data = self.vector_store.collection.get(include=["documents", "metadatas"])
+        docs = data.get("documents") or []
+        metas = data.get("metadatas") or []
+
+        if not docs:
+            self.bm25_index = None
+            self.texts = []
+            self.metadatas = []
+            self._last_version = getattr(self.vector_store, "_version", -1)
+            return
+
+        # flatten if nested
+        if isinstance(docs[0], list):
+            flat_docs = [d for sub in docs for d in sub if isinstance(d, str)]
+        else:
+            flat_docs = [d for d in docs if isinstance(d, str)]
+
+        self.texts = flat_docs
+        self.metadatas = metas if metas else [{} for _ in self.texts]
+
+        tokenized = [t.split() for t in self.texts]
+        if tokenized:
+            self.bm25_index = BM25Okapi(tokenized)
+        else:
+            self.bm25_index = None
+
+        self._last_version = getattr(self.vector_store, "_version", -1)
+
+    def retrieve(self, query: str, top_k=5):
+        # ensure indexes reflect latest data
+        self._build_bm25()
+
+        if not self.bm25_index:
             return []
 
-        D, I = self.vector_store.index.search(
-            np.array([query_vector]).astype("float32"),
-            top_k
-        )
+        query_tokens = query.split()
+        bm25_scores = np.array(self.bm25_index.get_scores(query_tokens))
+        if bm25_scores.size == 0:
+            top_bm25_idx = []
+        else:
+            top_bm25_idx = np.argsort(bm25_scores)[-top_k:][::-1]
 
-        results = []
+        semantic_results = self.vector_store.query(query, top_k=top_k)
 
-        for idx, dist in zip(I[0], D[0]):
-            if idx < 0 or idx >= len(self.vector_store.texts):
+        hybrid_results = []
+        seen = set()
+
+        for i in top_bm25_idx:
+            i = int(i)
+            if i < 0 or i >= len(self.texts):
                 continue
+            text = self.texts[i]
+            meta = self.metadatas[i] if i < len(self.metadatas) and isinstance(self.metadatas[i], dict) else {}
+            source = meta.get("source", "unknown")
+            chunk_id = meta.get("chunk_id", -1)
 
-            score = float(dist)
-
-            if score_threshold is not None and score > score_threshold:
+            key = (text, source, chunk_id)
+            if key in seen:
                 continue
+            seen.add(key)
 
-            results.append({
-                "text": self.vector_store.texts[idx],
-                "score": score,
-                "metadata": self.vector_store.metadata[idx]
+            hybrid_results.append({
+                "text": text,
+                "source": source,
+                "chunk_id": chunk_id,
+                "score": float(bm25_scores[i]) if bm25_scores.size > 0 else 0.0,
+                "retrieval_type": "bm25"
             })
 
-        return results
+        for r in semantic_results:
+            text = r.get("text", "")
+            source = r.get("source", "unknown")
+            chunk_id = r.get("chunk_id", -1)
+
+            key = (text, source, chunk_id)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            hybrid_results.append({
+                "text": text,
+                "source": source,
+                "chunk_id": chunk_id,
+                "retrieval_type": "semantic"
+            })
+
+        return hybrid_results[:top_k]

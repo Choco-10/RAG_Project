@@ -1,3 +1,4 @@
+/* -------------------- Global Reset & Fonts -------------------- */
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -13,56 +14,91 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* -------------------- Base Elements -------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--bg, #242424);
+  color: var(--text, rgba(255, 255, 255, 0.87));
+  font-family: inherit;
+  line-height: inherit;
+}
+
+/* -------------------- Links -------------------- */
 a {
   font-weight: 500;
   color: #646cff;
-  text-decoration: inherit;
+  text-decoration: none;
 }
 a:hover {
   color: #535bf2;
 }
 
-body {
+/* -------------------- Headings -------------------- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  font-weight: 700;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
+/* -------------------- Buttons -------------------- */
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  font-size: 1rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.25s;
+  border: none;
+  background: none;
+  transition: all 0.2s;
 }
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+button:focus {
+  outline: 2px solid #646cff;
+  outline-offset: 2px;
 }
 
+/* -------------------- Images -------------------- */
+img {
+  display: block;
+  max-width: 100%;
+}
+
+/* -------------------- Lists -------------------- */
+ul,
+ol {
+  padding-left: 1.25rem;
+}
+
+/* -------------------- Media Queries: Light Theme -------------------- */
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    --text: #213547;
+    --bg: #ffffff;
   }
   a:hover {
     color: #747bff;
   }
-  button {
-    background-color: #f9f9f9;
-  }
+}
+
+/* -------------------- Scrollbars -------------------- */
+body::-webkit-scrollbar {
+  width: 8px;
+}
+body::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 100, 100, 0.5);
+  border-radius: 4px;
+}
+body::-webkit-scrollbar-track {
+  background: transparent;
 }

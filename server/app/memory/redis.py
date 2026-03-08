@@ -1,12 +1,16 @@
 import redis
 import json
+import os
 from typing import List, Dict
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class RedisMemory:
-    def __init__(self, host="localhost", port=6379, db=0):
+    def __init__(self, host=None, port=None, db=0):
         self.client = redis.Redis(
-            host=host,
-            port=port,
+            host=host or os.getenv("REDIS_HOST", "localhost"),
+            port=port or int(os.getenv("REDIS_PORT", 6379)),
             db=db,
             decode_responses=True
         )

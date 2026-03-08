@@ -1,0 +1,58 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.textarea {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.375rem;
+  resize: none;
+}
+
+.fileInput {
+  margin-top: 0.25rem;
+}
+
+.filePreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.fileItem {
+  background-color: #f3f4f6; /* light gray */
+  color: #1d4ed8; /* blue text for file name */
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.fileItem button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: red;
+  font-weight: bold;
+}
+
+.button {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.button:hover {
+  background-color: #1d4ed8;
+}
