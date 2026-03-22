@@ -1,13 +1,134 @@
 /* -------------------- Chat Container -------------------- */
 .container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: 1rem;
   height: 100vh; /* Full viewport height */
-  max-width: 900px; /* Optional max width for large screens */
+  max-width: 1200px; /* Optional max width for large screens */
   margin: 0 auto; /* Center horizontally */
   padding: 1rem;
   background-color: var(--bg, #242424);
   color: var(--text, rgba(255, 255, 255, 0.87));
+}
+
+.sidebar {
+  width: 320px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #2f2f2f;
+  border-radius: 0.5rem;
+  background-color: #1a1a1a;
+  padding: 0.75rem;
+  overflow: hidden;
+}
+
+.sidebarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sidebarTitle {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.sidebarActions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.sidebarButton,
+.sidebarDangerButton {
+  border: 1px solid #3f3f3f;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  color: #f3f4f6;
+  background: #252525;
+}
+
+.sidebarButton:hover,
+.sidebarDangerButton:hover {
+  border-color: #646cff;
+  background: #313131;
+}
+
+.sidebarDangerButton {
+  color: #fecaca;
+}
+
+.sidebarStats {
+  font-size: 0.8rem;
+  color: #d1d5db;
+  margin-bottom: 0.5rem;
+}
+
+.docError {
+  font-size: 0.8rem;
+  color: #fca5a5;
+  margin-bottom: 0.5rem;
+}
+
+.docsList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.docsEmpty {
+  font-size: 0.9rem;
+  color: #9ca3af;
+  padding: 0.5rem 0;
+}
+
+.docItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+  background: #222222;
+  border: 1px solid #323232;
+  border-radius: 0.375rem;
+  padding: 0.45rem 0.5rem;
+}
+
+.docMeta {
+  min-width: 0;
+}
+
+.docName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.docChunks {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.docRemoveButton {
+  border: 1px solid #7f1d1d;
+  color: #fecaca;
+  border-radius: 0.35rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.docRemoveButton:hover {
+  background-color: #3b0f0f;
+}
+
+.chatPanel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* -------------------- Header -------------------- */
@@ -15,6 +136,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.contextHint {
+  font-size: 0.875rem;
+  color: #9ca3af;
   margin-bottom: 0.5rem;
 }
 
@@ -96,6 +223,13 @@
 @media (max-width: 768px) {
   .container {
     padding: 0.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    max-height: 230px;
   }
   .title {
     font-size: 1.25rem;

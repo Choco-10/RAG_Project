@@ -2,7 +2,7 @@
 import torch
 from dotenv import load_dotenv
 from threading import Lock
-from typing import Optional, Generator
+from typing import Optional, Generator, List, Dict
 
 from transformers import (
     AutoTokenizer,
@@ -15,6 +15,17 @@ load_dotenv()
 
 MODEL_NAME = os.getenv("MODEL_NAME", "HuggingFaceTB/SmolLM3-3B")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _env_true(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+LOCAL_FILES_ONLY = (
+    _env_true("LOCAL_FILES_ONLY")
+    or _env_true("HF_HUB_OFFLINE")
+    or _env_true("TRANSFORMERS_OFFLINE")
+)
 
 _tokenizer: Optional[AutoTokenizer] = None
 _model: Optional[AutoModelForCausalLM] = None
@@ -48,25 +59,44 @@ def load_model():
 
         use_cuda = torch.cuda.is_available()
 
-        _tokenizer = AutoTokenizer.from_pretrained(
-            MODEL_NAME,
-            use_fast=False
-        )
-
-        if use_cuda:
-            _model = AutoModelForCausalLM.from_pretrained(
+        try:
+            _tokenizer = AutoTokenizer.from_pretrained(
                 MODEL_NAME,
-                device_map="auto",
-                quantization_config=_bnb_config(),
-                trust_remote_code=True,
-                low_cpu_mem_usage=True
+                use_fast=False,
+                local_files_only=LOCAL_FILES_ONLY
             )
-        else:
-            _model = AutoModelForCausalLM.from_pretrained(
-                MODEL_NAME,
-                torch_dtype=torch.float32,
-                trust_remote_code=True
-            ).to("cpu")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load tokenizer for '{MODEL_NAME}'. "
+                "If running offline, first download model files with internet once, "
+                "then set HF_HUB_OFFLINE=1 and TRANSFORMERS_OFFLINE=1. "
+                f"Original error: {e}"
+            ) from e
+
+        try:
+            if use_cuda:
+                _model = AutoModelForCausalLM.from_pretrained(
+                    MODEL_NAME,
+                    device_map="auto",
+                    quantization_config=_bnb_config(),
+                    trust_remote_code=True,
+                    low_cpu_mem_usage=True,
+                    local_files_only=LOCAL_FILES_ONLY,
+                )
+            else:
+                _model = AutoModelForCausalLM.from_pretrained(
+                    MODEL_NAME,
+                    torch_dtype=torch.float32,
+                    trust_remote_code=True,
+                    local_files_only=LOCAL_FILES_ONLY,
+                ).to("cpu")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load model '{MODEL_NAME}'. "
+                "If running offline, first download model files with internet once, "
+                "then set HF_HUB_OFFLINE=1 and TRANSFORMERS_OFFLINE=1. "
+                f"Original error: {e}"
+            ) from e
 
         _model.eval()
 
@@ -74,7 +104,7 @@ def load_model():
 # -----------------------------
 # Build chat messages
 # -----------------------------
-def build_messages(question: str, context: str, history: str = ""):
+def build_messages(question: str, context: str, history_messages: Optional[List[Dict[str, str]]] = None):
 
     system_prompt = (
         "/no_think\n"
@@ -87,8 +117,11 @@ def build_messages(question: str, context: str, history: str = ""):
         {"role": "system", "content": system_prompt}
     ]
 
-    if history:
-        messages.append({"role": "assistant", "content": history})
+    for msg in history_messages or []:
+        role = msg.get("role")
+        content = (msg.get("content") or "").strip()
+        if role in {"user", "assistant"} and content:
+            messages.append({"role": role, "content": content})
 
     messages.append({
         "role": "user",
@@ -99,39 +132,48 @@ def build_messages(question: str, context: str, history: str = ""):
 
 
 # -----------------------------
-# Clean model output
+# Clean model output (minimal)
 # -----------------------------
 import re
+
+_TRANSCRIPT_MARKER_RE = re.compile(r"\b(?:user|assistant|system)\s*:", flags=re.IGNORECASE)
+
+
+def sanitize_generated_text(text: str) -> str:
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    if not text:
+        return "I don't know."
+
+    # If the model starts replaying chat transcript, keep only the answer prefix.
+    marker = _TRANSCRIPT_MARKER_RE.search(text)
+    if marker:
+        text = text[:marker.start()].strip()
+
+    text = re.sub(r"\s+", " ", text).strip()
+
+    if not text:
+        return "I don't know."
+
+    if "i don't know" in text.lower():
+        return "I don't know."
+
+    return text
 
 def clean_output(decoded: str, prompt: str) -> str:
     text = decoded
 
-    # Remove the prompt if present
-    if text.startswith(prompt):
-        text = text[len(prompt):]
+    # Extract assistant response only (after last "assistant" marker)
+    # This handles cases where the full prompt is included in decoded
+    parts = text.split("assistant")
+    if len(parts) > 1:
+        # Take everything after the last "assistant" marker
+        text = parts[-1].strip()
+    else:
+        # Fallback: try to remove prompt prefix
+        if text.startswith(prompt):
+            text = text[len(prompt):].strip()
 
-    text = text.strip()
-
-    # Remove reasoning blocks
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-
-    # Remove role markers
-    text = re.sub(r"\bassistant\b", "", text, flags=re.IGNORECASE)
-
-    # Remove prompt echoes
-    text = re.sub(r"Context:.*?Question:", "", text, flags=re.DOTALL)
-    text = re.sub(r"Question:.*", "", text)
-
-    text = text.strip()
-
-    # If model said "I don't know", enforce exact output
-    if "i don't know" in text.lower():
-        return "I don't know."
-
-    # Keep only first paragraph
-    text = text.split("\n\n")[0]
-
-    return text.strip()
+    return sanitize_generated_text(text)
 
 # -----------------------------
 # Generate answer
@@ -139,13 +181,13 @@ def clean_output(decoded: str, prompt: str) -> str:
 def generate_answer(
     question: str,
     context: str,
-    history: str = "",
+    history_messages: Optional[List[Dict[str, str]]] = None,
     max_new_tokens: int = 128
 ) -> str:
 
     load_model()
 
-    messages = build_messages(question, context, history)
+    messages = build_messages(question, context, history_messages)
 
     prompt = _tokenizer.apply_chat_template(
         messages,
@@ -173,10 +215,7 @@ def generate_answer(
 
     answer = clean_output(decoded, prompt)
 
-    if answer.lower().startswith("i don't know"):
-        return "I don't know."
-
-    return answer
+    return answer if answer else "I don't know."
 
 
 # -----------------------------
@@ -185,13 +224,13 @@ def generate_answer(
 def stream_answer(
     question: str,
     context: str,
-    history: str = "",
+    history_messages: Optional[List[Dict[str, str]]] = None,
     max_new_tokens: int = 128
 ) -> Generator[str, None, None]:
 
     load_model()
 
-    messages = build_messages(question, context, history)
+    messages = build_messages(question, context, history_messages)
 
     prompt = _tokenizer.apply_chat_template(
         messages,

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 import json
 
 from app.rag.pipeline import query_rag, retriever, memory
-from app.llm.llm_model import stream_answer
+from app.llm.llm_model import stream_answer, sanitize_generated_text
 
 router = APIRouter()
 
@@ -13,14 +13,8 @@ class ChatRequest(BaseModel):
     question: str
     top_k: int = Field(default=5, ge=1, le=20)
 
-def _format_history(messages, max_messages: int = 6) -> str:
-    recent = messages[-max_messages:]
-    lines = []
-    for msg in recent:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        lines.append(f"{role}: {content}")
-    return "\n".join(lines)
+def _recent_history(messages, max_messages: int = 6):
+    return messages[-max_messages:]
 
 @router.post("")
 def chat(req: ChatRequest):
@@ -33,15 +27,14 @@ def chat(req: ChatRequest):
 @router.post("/stream")
 def chat_stream(req: ChatRequest):
     def event_generator():
-        memory.add_message(req.session_id, "user", req.question)
-
-        retrieved = retriever.retrieve(req.question, top_k=req.top_k)
         history = memory.get_history(req.session_id)
-        history_text = _format_history(history)
+        history_messages = _recent_history(history)
+        retrieved = retriever.retrieve(req.question, top_k=req.top_k)
 
         if not retrieved:
             answer = "No relevant documents found."
             yield f"data: {json.dumps({'token': answer})}\n\n"
+            memory.add_message(req.session_id, "user", req.question)
             memory.add_message(req.session_id, "assistant", answer)
             yield "data: [DONE]\n\n"
             return
@@ -50,11 +43,12 @@ def chat_stream(req: ChatRequest):
         sources = [{"source": r.get("source", "unknown"), "chunk_id": r.get("chunk_id", -1)} for r in retrieved]
 
         parts = []
-        for token in stream_answer(req.question, context, history=history_text):
+        for token in stream_answer(req.question, context, history_messages=history_messages):
             parts.append(token)
             yield f"data: {json.dumps({'token': token})}\n\n"
 
-        final_answer = "".join(parts).strip() or "No response generated."
+        final_answer = sanitize_generated_text("".join(parts))
+        memory.add_message(req.session_id, "user", req.question)
         memory.add_message(req.session_id, "assistant", final_answer)
 
         yield f"data: {json.dumps({'sources': sources, 'done': True})}\n\n"

@@ -13,8 +13,8 @@ export default function ChatWindow({ loading }) {
 
   return (
     <div className={styles.container}>
-      {messages.map((msg, idx) => (
-        <ChatMessage key={idx} message={msg} />
+      {messages.map((msg) => (
+        <ChatMessage key={msg.id} message={msg} />
       ))}
 
       {loading && (

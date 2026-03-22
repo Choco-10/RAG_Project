@@ -28,13 +28,18 @@ export default function ChatMessage({ message }) {
               </span>
 
               {/* Progress bar */}
-              {!f.uploaded && (
+              {!f.uploaded && !f.error && (
                 <div className={styles.progressBarWrapper}>
                   <div
                     className={styles.progressBar}
                     style={{ width: `${f.progress}%` }}
                   />
                 </div>
+              )}
+
+              {/* Error message */}
+              {f.error && (
+                <span className={styles.errorMessage}>❌ {f.error}</span>
               )}
             </div>
           ))}

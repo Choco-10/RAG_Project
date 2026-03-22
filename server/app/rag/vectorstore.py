@@ -15,11 +15,16 @@ class ChromaVectorStore:
         self.collection = self.client.get_or_create_collection(name="documents")
         self._version = 0
 
-    def add(self, texts: List[str], source: str):
+    def add(self, texts: List[str], source: str, stored_filename: str | None = None):
         if not texts:
             return
         batch_id = str(uuid4())
-        metadatas = [{"source": source, "chunk_id": i} for i in range(len(texts))]
+        metadatas = []
+        for i in range(len(texts)):
+            meta = {"source": source, "chunk_id": i}
+            if stored_filename:
+                meta["stored_filename"] = stored_filename
+            metadatas.append(meta)
         ids = [f"{batch_id}-{i}" for i in range(len(texts))]
         embeddings = [get_embedding(t) for t in texts]
         self.collection.add(documents=texts, metadatas=metadatas, ids=ids, embeddings=embeddings)
@@ -47,3 +52,51 @@ class ChromaVectorStore:
             source_to_chunks[source] = source_to_chunks.get(source, 0) + 1
 
         return [{"source": k, "chunks": v} for k, v in source_to_chunks.items()]
+
+    def delete_by_source(self, source: str) -> int:
+        data = self.collection.get(where={"source": source}, include=[])
+        ids = data.get("ids") or []
+        if not ids:
+            return 0
+
+        self.collection.delete(ids=ids)
+        self._version += 1
+        return len(ids)
+
+    def get_stored_filenames_by_source(self, source: str) -> List[str]:
+        data = self.collection.get(where={"source": source}, include=["metadatas"])
+        metas = data.get("metadatas") or []
+        files = set()
+
+        for meta in metas:
+            if not isinstance(meta, dict):
+                continue
+            stored = meta.get("stored_filename")
+            if isinstance(stored, str) and stored:
+                files.add(stored)
+
+        return list(files)
+
+    def get_all_stored_filenames(self) -> List[str]:
+        data = self.collection.get(include=["metadatas"])
+        metas = data.get("metadatas") or []
+        files = set()
+
+        for meta in metas:
+            if not isinstance(meta, dict):
+                continue
+            stored = meta.get("stored_filename")
+            if isinstance(stored, str) and stored:
+                files.add(stored)
+
+        return list(files)
+
+    def clear_documents(self) -> int:
+        data = self.collection.get(include=[])
+        ids = data.get("ids") or []
+        if not ids:
+            return 0
+
+        self.collection.delete(ids=ids)
+        self._version += 1
+        return len(ids)

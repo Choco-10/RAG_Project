@@ -5,6 +5,8 @@ from app.loaders.pdf import load_pdf
 from app.celery_worker import celery_app
 import os
 import uuid
+from pathlib import Path
+import re
 
 router = APIRouter()
 
@@ -16,12 +18,33 @@ MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 ALLOWED_EXTENSIONS = {"pdf"}
 ALLOWED_CONTENT_TYPES = {"application/pdf"}
 
+
+def _sanitize_filename(name: str) -> str:
+    base = os.path.basename(name or "document.pdf")
+    # Keep filenames filesystem-safe while preserving readability.
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    return cleaned or "document.pdf"
+
+
+def _delete_uploaded_files(file_names: list[str]) -> int:
+    deleted = 0
+    for name in set(file_names):
+        if not name:
+            continue
+        path = Path(UPLOAD_DIR) / os.path.basename(name)
+        if path.exists() and path.is_file():
+            path.unlink(missing_ok=True)
+            deleted += 1
+    return deleted
+
 @router.post("")
 async def upload_file(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
 
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    original_name = _sanitize_filename(file.filename)
+
+    ext = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else ""
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
@@ -35,7 +58,7 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail=f"File too large. Max allowed is {MAX_UPLOAD_MB}MB")
 
     file_id = str(uuid.uuid4())
-    safe_name = f"{file_id}.{ext}"
+    safe_name = f"{file_id}__{original_name}"
     save_path = os.path.join(UPLOAD_DIR, safe_name)
 
     with open(save_path, "wb") as f:
@@ -45,7 +68,7 @@ async def upload_file(file: UploadFile = File(...)):
     if not text or not text.strip():
         raise HTTPException(status_code=422, detail="No extractable text found in PDF")
 
-    task = ingest_document.delay(text, source=file.filename)
+    task = ingest_document.delay(text, source=original_name, stored_filename=safe_name)
 
     return {
         "message": "File uploaded successfully",
@@ -66,3 +89,39 @@ def task_status(task_id: str):
 @router.get("/documents")
 def list_documents():
     return {"documents": vector_store.list_documents()}
+
+
+@router.delete("/documents/{source}")
+def delete_document(source: str):
+    stored_files = vector_store.get_stored_filenames_by_source(source)
+    deleted_chunks = vector_store.delete_by_source(source)
+    if deleted_chunks == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    deleted_files = _delete_uploaded_files(stored_files)
+
+    return {
+        "message": "Document removed from context",
+        "source": source,
+        "deleted_chunks": deleted_chunks,
+        "deleted_files": deleted_files,
+    }
+
+
+@router.delete("/documents")
+def clear_documents():
+    stored_files = vector_store.get_all_stored_filenames()
+    deleted_chunks = vector_store.clear_documents()
+    deleted_files = _delete_uploaded_files(stored_files)
+
+    # Best-effort cleanup for older uploads that may not have metadata mapping.
+    for leftover in Path(UPLOAD_DIR).glob("*.pdf"):
+        if leftover.is_file():
+            leftover.unlink(missing_ok=True)
+            deleted_files += 1
+
+    return {
+        "message": "All documents removed from context",
+        "deleted_chunks": deleted_chunks,
+        "deleted_files": deleted_files,
+    }

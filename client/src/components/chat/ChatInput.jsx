@@ -4,6 +4,7 @@ import styles from "./ChatInput.module.css";
 export default function ChatInput({ onSend }) {
   const [value, setValue] = useState(""); // message text
   const [files, setFiles] = useState([]); // selected files
+  const [isSending, setIsSending] = useState(false); // loading state
 
   // Add new files from input
   const handleFileChange = (e) => {
@@ -20,13 +21,28 @@ export default function ChatInput({ onSend }) {
   // Send message + files to parent
   const handleSend = async () => {
     if (!value.trim() && files.length === 0) return;
+    if (isSending) return; // Prevent duplicate sends
 
-    // Pass content and files to Chat.jsx handleSend
-    await onSend({ content: value.trim(), files });
+    const contentToSend = value.trim();
+    const filesToSend = files;
 
-    // Clear local input and preview
+    // Clear UI immediately so typing box does not wait for server response/stream
     setValue("");
     setFiles([]);
+
+    setIsSending(true);
+    try {
+      // Pass content and files to Chat.jsx handleSend
+      await onSend({ content: contentToSend, files: filesToSend });
+    } catch (err) {
+      console.error("Send failed:", err);
+
+      // Restore unsent content so user can retry
+      setValue(contentToSend);
+      setFiles(filesToSend);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -61,8 +77,8 @@ export default function ChatInput({ onSend }) {
       )}
 
       {/* Send button */}
-      <button className={styles.button} onClick={handleSend}>
-        Send
+      <button className={styles.button} onClick={handleSend} disabled={isSending}>
+        {isSending ? "Sending..." : "Send"}
       </button>
     </div>
   );

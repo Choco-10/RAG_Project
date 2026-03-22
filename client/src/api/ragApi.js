@@ -27,6 +27,16 @@ export const getDocuments = async () => {
   return res.data;
 };
 
+export const deleteDocument = async (source) => {
+  const res = await api.delete(`/api/upload/documents/${encodeURIComponent(source)}`);
+  return res.data;
+};
+
+export const clearDocuments = async () => {
+  const res = await api.delete("/api/upload/documents");
+  return res.data;
+};
+
 export const askRagQuery = async ({ question, session_id, top_k = 5 }) => {
   const res = await api.post("/api/chat", {
     question,
@@ -37,7 +47,8 @@ export const askRagQuery = async ({ question, session_id, top_k = 5 }) => {
 };
 
 export const streamRagQuery = async ({ question, session_id, top_k = 5, onToken, onMeta }) => {
-  const res = await fetch("http://localhost:8000/api/chat/stream", {
+  const baseURL = api.defaults.baseURL || "http://localhost:8000";
+  const res = await fetch(`${baseURL}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, session_id, top_k }),
@@ -52,23 +63,32 @@ export const streamRagQuery = async ({ question, session_id, top_k = 5, onToken,
   let buffer = "";
 
   while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
+    try {
+      const { value, done } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || "";
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
 
-    for (const event of events) {
-      const line = event.split("\n").find((l) => l.startsWith("data: "));
-      if (!line) continue;
+      for (const event of events) {
+        const line = event.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
 
-      const payload = line.replace("data: ", "").trim();
-      if (payload === "[DONE]") return;
+        const payload = line.replace("data: ", "").trim();
+        if (payload === "[DONE]") return;
 
-      const parsed = JSON.parse(payload);
-      if (parsed.token) onToken?.(parsed.token);
-      if (parsed.sources || parsed.done) onMeta?.(parsed);
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.token) onToken?.(parsed.token);
+          if (parsed.sources || parsed.done) onMeta?.(parsed);
+        } catch (parseErr) {
+          console.error("Failed to parse streaming payload:", parseErr);
+        }
+      }
+    } catch (err) {
+      console.error("Stream reading error:", err);
+      throw err;
     }
   }
 };
